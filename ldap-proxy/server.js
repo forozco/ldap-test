@@ -332,8 +332,8 @@ app.post("/api/auth/login", async (req, res) => {
         ok: false,
         error: "Error de conectividad al servidor LDAP. Verifique la VPN."
       });
-    } else if (err.message.includes('Invalid Credentials') || err.code === 49) {
-      // Error de credenciales
+    } else if (err.message.includes('Invalid Credentials') || err.code === 49 || err.message.includes('No se encontró un formato DN válido')) {
+      // Error de credenciales (incluye cuando todos los DN fallan)
       console.log(`[ERROR] Credenciales inválidas`);
       return res.status(401).json({
         ok: false,
