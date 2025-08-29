@@ -7,6 +7,14 @@ import jwt from "jsonwebtoken";
 dotenv.config();
 
 const app = express();
+
+// Middleware de logging para todas las peticiones
+app.use((req, res, next) => {
+  const timestamp = new Date().toISOString();
+  console.log(`[${timestamp}] ${req.method} ${req.url} - IP: ${req.ip}`);
+  next();
+});
+
 app.use(express.json());
 app.use(cors({
   origin: process.env.CORS_ORIGIN?.split(",") || "*",
@@ -16,10 +24,33 @@ app.use(cors({
 const LDAP_URL = process.env.LDAP_URL;
 const USER_DN_PATTERN = process.env.LDAP_USER_DN_PATTERN;
 const GROUP_BASE = process.env.LDAP_GROUP_SEARCH_BASE;
+const GROUP_SEARCH_FILTER = process.env.LDAP_GROUP_SEARCH_FILTER || "(memberUid={0})";
 const DEV_MODE = process.env.DEV_MODE === "true";
 
 function buildUserDN(username) {
   return USER_DN_PATTERN.replace("{0}", username);
+}
+
+// Función para probar múltiples formatos de DN
+async function tryMultipleDNFormats(username, password) {
+  const dnFormats = [
+    `uid=${username},ou=People,dc=ife,dc=org,dc=mx`,
+    `cn=${username},ou=externo,ou=People,dc=ine,dc=mx`,
+    `uid=${username},ou=People,dc=ine,dc=mx`,
+    `cn=${username},ou=People,dc=ife,dc=org,dc=mx`
+  ];
+
+  for (const userDN of dnFormats) {
+    try {
+      console.log(`[LDAP] Probando DN: ${userDN}`);
+      const client = await ldapBind(userDN, password);
+      console.log(`[LDAP] ¡Éxito con DN: ${userDN}!`);
+      return { client, userDN };
+    } catch (err) {
+      console.log(`[LDAP] Falló DN ${userDN}: ${err.message}`);
+    }
+  }
+  throw new Error("No se encontró un formato DN válido");
 }
 
 function ldapBind(userDN, password) {
@@ -117,19 +148,19 @@ app.post("/api/auth/login", async (req, res) => {
   }
 
   console.log(`[LOGIN] Intento de login para usuario: ${username}`);
-  const userDN = buildUserDN(username);
-  console.log(`[LOGIN] UserDN construido: ${userDN}`);
 
   try {
-    console.log(`[LOGIN] Intentando bind LDAP...`);
-    const client = await ldapBind(userDN, password);
-    console.log(`[LOGIN] Bind exitoso, buscando grupos...`);
+    console.log(`[LOGIN] Probando múltiples formatos DN...`);
+    const { client, userDN } = await tryMultipleDNFormats(username, password);
+    console.log(`[LOGIN] Bind exitoso con DN: ${userDN}, buscando grupos...`);
 
     let groups = [];
     try {
+      const groupFilter = GROUP_SEARCH_FILTER.replace("{0}", username);
+      console.log(`[LOGIN] Filtro de grupos: ${groupFilter}`);
       const groupEntries = await ldapSearch(client, GROUP_BASE, {
         scope: "sub",
-        filter: `(member=${userDN})`
+        filter: groupFilter
       });
       groups = groupEntries.map(g => g.cn).filter(Boolean);
       console.log(`[LOGIN] Grupos del usuario: ${groups.join(', ')}`);
@@ -149,9 +180,9 @@ app.post("/api/auth/login", async (req, res) => {
     console.log(`[LOGIN] Login exitoso para: ${username}`);
     return res.json({ ok: true, token, user: { username, dn: userDN, groups } });
   } catch (err) {
-    console.log(`Error LDAP para usuario ${username}:`, err.message);
-    console.log(`UserDN construido: ${userDN}`);
-    console.log(`LDAP URL: ${LDAP_URL}`);
+    console.log(`[ERROR] Error LDAP para usuario ${username}:`, err.message);
+    console.log(`[ERROR] LDAP URL: ${LDAP_URL}`);
+    console.log(`[ERROR] Detalles completos:`, err);
     return res.status(401).json({ ok: false, error: "Credenciales inválidas o error de conexión LDAP" });
   }
 });
@@ -170,4 +201,24 @@ app.get("/api/auth/profile", (req, res) => {
 });
 
 const port = process.env.PORT || 4000;
-app.listen(port, () => console.log(`LDAP proxy en http://localhost:${port}`));
+app.listen(port, () => {
+  console.log(`========================================`);
+  console.log(`🚀 LDAP proxy iniciado exitosamente`);
+  console.log(`📡 URL: http://localhost:${port}`);
+  console.log(`🔗 LDAP Server: ${LDAP_URL}`);
+  console.log(`🔧 Modo desarrollo: ${DEV_MODE ? 'ACTIVADO' : 'DESACTIVADO'}`);
+  console.log(`📋 Endpoints disponibles:`);
+  console.log(`   POST /api/auth/login`);
+  console.log(`   GET  /api/auth/profile`);
+  console.log(`========================================`);
+});
+
+// Logging de errores no capturados
+process.on('uncaughtException', (err) => {
+  console.error('❌ Error no capturado:', err.message);
+  console.error('Stack:', err.stack);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('❌ Promesa rechazada no manejada:', reason);
+});
