@@ -48,6 +48,7 @@ const LDAP_URL = process.env.LDAP_URL;
 const USER_DN_PATTERN = process.env.LDAP_USER_DN_PATTERN;
 const GROUP_BASE = process.env.LDAP_GROUP_SEARCH_BASE;
 const GROUP_SEARCH_FILTER = process.env.LDAP_GROUP_SEARCH_FILTER || "(memberUid={1})";
+const GROUP_ROLE_ATTRIBUTE = process.env.LDAP_GROUP_ROLE_ATTRIBUTE || "cn";
 const DEV_MODE = process.env.DEV_MODE === "true";
 
 function buildUserDN(username) {
@@ -57,16 +58,25 @@ function buildUserDN(username) {
 // Función para probar múltiples formatos de DN basados en configuración INE
 async function tryMultipleDNFormats(username, password) {
   const dnFormats = [
-    // Patrón principal de INE (basado en Java config)
+    // Patrón principal de INE (nuevo formato con dc=ife.org.mx)
+    `uid=${username},ou=People,dc=ife.org.mx`,
+    `cn=${username},ou=People,dc=ife.org.mx`,
+    // Patrones para usuarios externos (nuevo formato)
+    `uid=${username},ou=externo,ou=People,dc=ife.org.mx`,
+    `cn=${username},ou=externo,ou=People,dc=ife.org.mx`,
+    // Patrón principal de INE (formato antiguo)
     `uid=${username},ou=People,dc=ife,dc=org,dc=mx`,
     `cn=${username},ou=People,dc=ife,dc=org,dc=mx`,
     // Patrones alternativos INE
     `uid=${username},ou=People,dc=ine,dc=mx`,
     `cn=${username},ou=People,dc=ine,dc=mx`,
-    // Patrones para usuarios externos
+    // Patrones para usuarios externos (formato antiguo)
     `cn=${username},ou=externo,ou=People,dc=ine,dc=mx`,
     `uid=${username},ou=externo,ou=People,dc=ine,dc=mx`,
-    // Patrón simple sin OU
+    // Patrón simple sin OU (nuevo formato)
+    `uid=${username},dc=ife.org.mx`,
+    `cn=${username},dc=ife.org.mx`,
+    // Patrón simple sin OU (formato antiguo)
     `uid=${username},dc=ife,dc=org,dc=mx`,
     `cn=${username},dc=ife,dc=org,dc=mx`
   ];
@@ -114,10 +124,120 @@ function ldapBind(userDN, password) {
   });
 }
 
+// Función para buscar grupos con múltiples patrones (basada en Spring Security INE)
+async function findUserGroups(client, userDN, username) {
+  console.log(`[GROUPS] Iniciando búsqueda de grupos para: ${username}`);
+  console.log(`[GROUPS] DN del usuario: ${userDN}`);
+
+  const groupSearchPatterns = [
+    // Patrón 1: Configuración exacta del INE (Spring Security)
+    // {1} se reemplaza con el DN completo del usuario
+    {
+      base: GROUP_BASE,
+      filter: GROUP_SEARCH_FILTER.replace("{1}", userDN),
+      description: "Configuración INE principal con DN completo"
+    },
+    // Patrón 2: {1} se reemplaza con el username
+    {
+      base: GROUP_BASE,
+      filter: GROUP_SEARCH_FILTER.replace("{1}", username),
+      description: "Configuración INE con username"
+    },
+    // Patrón 3: Nuevo formato de dominio con username
+    {
+      base: "ou=Grupos,dc=ife.org.mx",
+      filter: `(memberUid=${username})`,
+      description: "Nuevo formato dc=ife.org.mx con username"
+    },
+    // Patrón 4: Nuevo formato de dominio con DN completo
+    {
+      base: "ou=Grupos,dc=ife.org.mx",
+      filter: `(member=${userDN})`,
+      description: "Nuevo formato dc=ife.org.mx con DN completo"
+    },
+    // Patrón 5: memberUid con username simple (formato antiguo)
+    {
+      base: "ou=Grupos,dc=ife,dc=org,dc=mx",
+      filter: `(memberUid=${username})`,
+      description: "memberUid directo con username (formato antiguo)"
+    },
+    // Patrón 6: member con DN completo (formato antiguo)
+    {
+      base: "ou=Grupos,dc=ife,dc=org,dc=mx",
+      filter: `(member=${userDN})`,
+      description: "member con DN completo (formato antiguo)"
+    },
+    // Patrón 7: uniqueMember con DN completo
+    {
+      base: "ou=Grupos,dc=ife,dc=org,dc=mx",
+      filter: `(uniqueMember=${userDN})`,
+      description: "uniqueMember con DN completo"
+    },
+    // Patrón 8: Búsqueda en base INE
+    {
+      base: "ou=Grupos,dc=ine,dc=mx",
+      filter: `(memberUid=${username})`,
+      description: "Base INE con memberUid"
+    },
+    // Patrón 9: Búsqueda específica de roles SIMETIS/OBSERVADORES (formato nuevo)
+    {
+      base: "dc=ife.org.mx",
+      filter: `(&(|(memberUid=${username})(member=${userDN}))(|(cn=*SIMETIS*)(cn=*OBSERVADORES*)(cn=ROLE_*)))`,
+      description: "Búsqueda específica de authorities SIMETIS/OBSERVADORES (formato nuevo)"
+    },
+    // Patrón 10: Búsqueda específica de roles SIMETIS/OBSERVADORES (formato antiguo)
+    {
+      base: "dc=ife,dc=org,dc=mx",
+      filter: `(&(|(memberUid=${username})(member=${userDN}))(|(cn=*SIMETIS*)(cn=*OBSERVADORES*)(cn=ROLE_*)))`,
+      description: "Búsqueda específica de authorities SIMETIS/OBSERVADORES (formato antiguo)"
+    }
+  ];
+
+  let allGroups = [];
+
+  for (const pattern of groupSearchPatterns) {
+    try {
+      console.log(`[GROUPS] 🔍 ${pattern.description}`);
+      console.log(`[GROUPS] Base: ${pattern.base}`);
+      console.log(`[GROUPS] Filtro: ${pattern.filter}`);
+
+      const groups = await ldapSearch(client, pattern.base, {
+        scope: "sub",
+        filter: pattern.filter,
+        attributes: ['cn', 'description', 'member', 'memberUid', 'uniqueMember', 'objectClass']
+      });
+
+      if (groups.length > 0) {
+        console.log(`[GROUPS] ✅ Encontrados ${groups.length} grupos`);
+        groups.forEach(group => {
+          const groupName = group[GROUP_ROLE_ATTRIBUTE] || group.cn;
+          console.log(`[GROUPS] 📋 Grupo: ${groupName} (DN: ${group.dn})`);
+        });
+        allGroups = allGroups.concat(groups);
+      } else {
+        console.log(`[GROUPS] ❌ No se encontraron grupos`);
+      }
+    } catch (err) {
+      console.log(`[GROUPS] ⚠️ Error en patrón ${pattern.base}: ${err.message}`);
+    }
+  }
+
+  // Eliminar duplicados por nombre de grupo
+  const uniqueGroups = allGroups.filter((group, index, self) => {
+    const groupName = group[GROUP_ROLE_ATTRIBUTE] || group.cn || group.dn;
+    return index === self.findIndex(g =>
+      (g[GROUP_ROLE_ATTRIBUTE] || g.cn || g.dn) === groupName
+    );
+  });
+
+  console.log(`[GROUPS] 📊 Total de grupos únicos encontrados: ${uniqueGroups.length}`);
+  return uniqueGroups;
+}
+
+// Función auxiliar para realizar búsquedas LDAP
 function ldapSearch(client, base, options) {
   return new Promise((resolve, reject) => {
-    console.log(`[LDAP] Buscando grupos en base: ${base}`);
-    console.log(`[LDAP] Filtro de búsqueda: ${options.filter}`);
+    console.log(`[LDAP] Realizando búsqueda - Base: ${base}, Filtro: ${options.filter}`);
 
     const entries = [];
     client.search(base, options, (err, res) => {
@@ -127,8 +247,30 @@ function ldapSearch(client, base, options) {
       }
 
       res.on("searchEntry", (entry) => {
-        console.log(`[LDAP] Grupo encontrado:`, entry.object.cn);
-        entries.push(entry.object);
+        console.log(`[LDAP] Entrada encontrada: ${entry.dn}`);
+
+        // Obtener el objeto con todos los atributos
+        const obj = entry.object || {};
+        obj.dn = entry.dn;
+
+        // Intentar extraer cn de diferentes formas
+        if (!obj.cn && entry.dn) {
+          // Si no hay cn, intentar extraerlo del DN
+          const dnString = typeof entry.dn === 'string' ? entry.dn : entry.dn.toString();
+          const cnMatch = dnString.match(/cn=([^,]+)/i);
+          if (cnMatch) {
+            obj.cn = cnMatch[1];
+            console.log(`[LDAP] CN extraído del DN: ${obj.cn}`);
+          }
+        }
+
+        // Debug: mostrar todos los atributos disponibles
+        console.log(`[LDAP] Atributos disponibles:`, Object.keys(obj));
+        if (obj.cn) {
+          console.log(`[LDAP] CN encontrado: ${obj.cn}`);
+        }
+
+        entries.push(obj);
       });
 
       res.on("error", (err) => {
@@ -137,7 +279,7 @@ function ldapSearch(client, base, options) {
       });
 
       res.on("end", () => {
-        console.log(`[LDAP] Búsqueda completada. ${entries.length} grupos encontrados`);
+        console.log(`[LDAP] Búsqueda completada. ${entries.length} entradas encontradas`);
         resolve(entries);
       });
     });
@@ -272,18 +414,48 @@ app.post("/api/auth/login", async (req, res) => {
 
     console.log(`[LOGIN] Buscando grupos del usuario...`);
     let groups = [];
+    let authorities = []; // Declarar authorities aquí
+
     try {
-      // Usar {1} para DN completo según la configuración LDAP del INE
-      const groupFilter = GROUP_SEARCH_FILTER.replace("{1}", userDN);
-      console.log(`[LOGIN] Filtro de grupos: ${groupFilter}`);
-      const groupEntries = await ldapSearch(client, GROUP_BASE, {
-        scope: "sub",
-        filter: groupFilter
-      });
-      groups = groupEntries.map(g => g.cn).filter(Boolean);
-      console.log(`[LOGIN] Grupos del usuario: ${groups.join(', ')}`);
+      // Buscar grupos usando múltiples patrones (implementación similar a Spring Security)
+      const groupEntries = await findUserGroups(client, userDN, username);
+
+      // Procesar grupos y authorities como lo hace Spring Security INE
+      const groupNames = [];
+
+      for (const group of groupEntries) {
+        let roleName = group[GROUP_ROLE_ATTRIBUTE] || group.cn;
+
+        // Si no hay cn, extraer del DN
+        if (!roleName && group.dn && typeof group.dn === 'string') {
+          const dnMatch = group.dn.match(/cn=([^,]+)/i);
+          if (dnMatch) {
+            roleName = dnMatch[1];
+          }
+        }
+
+        if (roleName) {
+          groupNames.push(roleName);
+
+          // Spring Security automáticamente convierte nombres de grupo en authorities
+          // Si el nombre ya empieza con ROLE_, lo mantiene, sino lo agrega
+          if (roleName.startsWith('ROLE_')) {
+            authorities.push(roleName);
+          } else {
+            authorities.push(`ROLE_${roleName.toUpperCase()}`);
+          }
+        }
+      }
+
+      console.log(`[LOGIN] 📋 Grupos encontrados: ${groupNames.join(', ')}`);
+      console.log(`[LOGIN] 🔐 Authorities generadas: ${authorities.join(', ')}`);
+
+      // Mantener grupos y authorities separados
+      groups = groupNames;
+
     } catch (groupErr) {
       console.log(`[LOGIN] Error buscando grupos:`, groupErr.message);
+      // authorities ya está declarado arriba, no redeclararla
     }
 
     client.unbind(() => {});
@@ -294,6 +466,7 @@ app.post("/api/auth/login", async (req, res) => {
       sub: username,
       dn: userDN,
       groups,
+      authorities: authorities || [], // Campo authorities separado
       userDetails: userDetails,
       // Campos adicionales basados en configuración INE
       nombreCompleto: userDetails.nombreCompleto,
@@ -316,6 +489,7 @@ app.post("/api/auth/login", async (req, res) => {
         username,
         dn: userDN,
         groups,
+        authorities: authorities || [], // Campo authorities en la respuesta
         details: userDetails
       }
     });
