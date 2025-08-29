@@ -54,6 +54,7 @@ jspm_packages/
 /dist/
 /tmp/
 /out-tsc/
+/.angular/
 
 # IDE - VSCode
 .vscode/*
