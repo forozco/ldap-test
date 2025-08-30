@@ -6,12 +6,11 @@ Servidor proxy para autenticación LDAP del Instituto Nacional Electoral (INE).
 
 ```bash
 # 1. Clonar el repositorio
-git clone <tu-repo>
+git clone https://github.com/forozco/ldap-test.git
 cd ldap-test/ldap-proxy
 
-# 2. Ejecutar configuración automática
-chmod +x setup.sh
-./setup.sh
+# 2. Una sola línea para configurar todo
+chmod +x setup.sh && ./setup.sh
 
 # 3. Iniciar el servidor
 ./start-with-proxy.sh
