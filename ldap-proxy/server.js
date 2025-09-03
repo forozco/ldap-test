@@ -11,7 +11,7 @@ const app = express();
 // Middleware de logging detallado para todas las peticiones
 app.use((req, res, next) => {
   const timestamp = new Date().toISOString();
-  console.log(`\n🔥🔥🔥 PETICIÓN DETECTADA 🔥🔥🔥`);
+  console.log(`\nPETICION DETECTADA`);
   console.log(`\n==================== NUEVA PETICIÓN ====================`);
   console.log(`[${timestamp}] ${req.method} ${req.url}`);
   console.log(`[REQUEST] IP: ${req.ip}`);
@@ -197,7 +197,7 @@ async function findUserGroups(client, userDN, username) {
 
   for (const pattern of groupSearchPatterns) {
     try {
-      console.log(`[GROUPS] 🔍 ${pattern.description}`);
+      console.log(`[GROUPS] ${pattern.description}`);
       console.log(`[GROUPS] Base: ${pattern.base}`);
       console.log(`[GROUPS] Filtro: ${pattern.filter}`);
 
@@ -208,17 +208,17 @@ async function findUserGroups(client, userDN, username) {
       });
 
       if (groups.length > 0) {
-        console.log(`[GROUPS] ✅ Encontrados ${groups.length} grupos`);
+        console.log(`[GROUPS] Encontrados ${groups.length} grupos`);
         groups.forEach(group => {
           const groupName = group[GROUP_ROLE_ATTRIBUTE] || group.cn;
-          console.log(`[GROUPS] 📋 Grupo: ${groupName} (DN: ${group.dn})`);
+          console.log(`[GROUPS] Grupo: ${groupName} (DN: ${group.dn})`);
         });
         allGroups = allGroups.concat(groups);
       } else {
-        console.log(`[GROUPS] ❌ No se encontraron grupos`);
+        console.log(`[GROUPS] No se encontraron grupos`);
       }
     } catch (err) {
-      console.log(`[GROUPS] ⚠️ Error en patrón ${pattern.base}: ${err.message}`);
+      console.log(`[GROUPS] Error en patrón ${pattern.base}: ${err.message}`);
     }
   }
 
@@ -230,7 +230,7 @@ async function findUserGroups(client, userDN, username) {
     );
   });
 
-  console.log(`[GROUPS] 📊 Total de grupos únicos encontrados: ${uniqueGroups.length}`);
+  console.log(`[GROUPS] Total de grupos únicos encontrados: ${uniqueGroups.length}`);
   return uniqueGroups;
 }
 
@@ -344,7 +344,7 @@ function getUserDetails(client, userDN) {
 }
 
 app.post("/api/auth/login", async (req, res) => {
-  console.log(`\n🔐 ENDPOINT LOGIN ALCANZADO 🔐`);
+  console.log(`\nENDPOINT LOGIN ALCANZADO`);
   console.log(`[LOGIN] Método: ${req.method}`);
   console.log(`[LOGIN] URL: ${req.url}`);
   console.log(`[LOGIN] Ruta exacta: /api/auth/login`);
@@ -354,7 +354,7 @@ app.post("/api/auth/login", async (req, res) => {
   console.log(`[LOGIN] Password recibido: ${password ? '***EXISTE***' : 'UNDEFINED'}`);
 
   if (!username || !password) {
-    console.log(`[LOGIN] ❌ Faltan credenciales`);
+    console.log(`[LOGIN] Faltan credenciales`);
     return res.status(400).json({ ok: false, error: "username y password son requeridos" });
   }
 
@@ -447,8 +447,8 @@ app.post("/api/auth/login", async (req, res) => {
         }
       }
 
-      console.log(`[LOGIN] 📋 Grupos encontrados: ${groupNames.join(', ')}`);
-      console.log(`[LOGIN] 🔐 Authorities generadas: ${authorities.join(', ')}`);
+      console.log(`[LOGIN] Grupos encontrados: ${groupNames.join(', ')}`);
+      console.log(`[LOGIN] Authorities generadas: ${authorities.join(', ')}`);
 
       // Mantener grupos y authorities separados
       groups = groupNames;
@@ -525,7 +525,7 @@ app.post("/api/auth/login", async (req, res) => {
 });
 
 app.get("/api/auth/profile", (req, res) => {
-  console.log(`\n👤 ENDPOINT PROFILE ALCANZADO 👤`);
+  console.log(`\nENDPOINT PROFILE ALCANZADO`);
   console.log(`[PROFILE] Método: ${req.method}`);
   console.log(`[PROFILE] URL: ${req.url}`);
   console.log(`[PROFILE] Ruta exacta: /api/auth/profile`);
@@ -537,32 +537,32 @@ app.get("/api/auth/profile", (req, res) => {
   console.log(`[PROFILE] Token extraído: ${token ? 'PRESENTE' : 'NO PRESENTE'}`);
 
   if (!token) {
-    console.log(`[PROFILE] ❌ Falta token`);
+    console.log(`[PROFILE] Falta token`);
     return res.status(401).json({ ok: false, error: "Falta token" });
   }
 
   try {
     const payload = jwt.verify(token, process.env.JWT_SECRET);
-    console.log(`[PROFILE] ✅ Token válido para usuario: ${payload.sub}`);
+    console.log(`[PROFILE] Token válido para usuario: ${payload.sub}`);
     res.json({ ok: true, user: payload });
   } catch (err) {
-    console.log(`[PROFILE] ❌ Token inválido:`, err.message);
+    console.log(`[PROFILE] Token inválido:`, err.message);
     res.status(401).json({ ok: false, error: "Token inválido o expirado" });
   }
 });
 
 // Middleware para manejar rutas no encontradas (404)
 app.use('*', (req, res) => {
-  console.log(`\n❌ RUTA NO ENCONTRADA (404) ❌`);
+  console.log(`\nRUTA NO ENCONTRADA (404)`);
   console.log(`[404] Método: ${req.method}`);
   console.log(`[404] URL solicitada: ${req.originalUrl || req.url}`);
   console.log(`[404] Base URL: ${req.baseUrl}`);
   console.log(`[404] Path: ${req.path}`);
   console.log(`[404] Headers:`, JSON.stringify(req.headers, null, 2));
   console.log(`[404] Rutas disponibles:`);
-  console.log(`   ✅ POST /api/auth/login`);
-  console.log(`   ✅ GET  /api/auth/profile`);
-  console.log(`❌ FIN ERROR 404 ❌\n`);
+  console.log(`   POST /api/auth/login`);
+  console.log(`   GET  /api/auth/profile`);
+  console.log(`FIN ERROR 404\n`);
 
   res.status(404).json({
     ok: false,
@@ -576,11 +576,11 @@ app.use('*', (req, res) => {
 
 // Middleware global de manejo de errores
 app.use((err, req, res, next) => {
-  console.log(`\n❌ ERROR GLOBAL ❌`);
+  console.log(`\nERROR GLOBAL`);
   console.log(`[ERROR] Mensaje: ${err.message}`);
   console.log(`[ERROR] Stack:`, err.stack);
   console.log(`[ERROR] URL: ${req.method} ${req.originalUrl}`);
-  console.log(`❌ FIN ERROR GLOBAL ❌\n`);
+  console.log(`FIN ERROR GLOBAL\n`);
 
   res.status(500).json({
     ok: false,
@@ -592,24 +592,24 @@ app.use((err, req, res, next) => {
 const port = process.env.PORT || 4000;
 app.listen(port, () => {
   console.log(`========================================`);
-  console.log(`🚀 LDAP proxy iniciado exitosamente`);
-  console.log(`📡 URL: http://localhost:${port}`);
-  console.log(`🔗 LDAP Server: ${LDAP_URL}`);
-  console.log(`🔧 Modo desarrollo: ${DEV_MODE ? 'ACTIVADO' : 'DESACTIVADO'}`);
-  console.log(`📋 Endpoints disponibles:`);
+  console.log(`LDAP proxy iniciado exitosamente`);
+  console.log(`URL: http://localhost:${port}`);
+  console.log(`LDAP Server: ${LDAP_URL}`);
+  console.log(`Modo desarrollo: ${DEV_MODE ? 'ACTIVADO' : 'DESACTIVADO'}`);
+  console.log(`Endpoints disponibles:`);
   console.log(`   POST /api/auth/login`);
   console.log(`   GET  /api/auth/profile`);
   console.log(`========================================`);
-  console.log(`🔍 ESPERANDO PETICIONES... Logs aparecerán aquí abajo:`);
+  console.log(`ESPERANDO PETICIONES... Logs aparecerán aquí abajo:`);
   console.log(`========================================`);
 });
 
 // Logging de errores no capturados
 process.on('uncaughtException', (err) => {
-  console.error('❌ Error no capturado:', err.message);
+  console.error('Error no capturado:', err.message);
   console.error('Stack:', err.stack);
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-  console.error('❌ Promesa rechazada no manejada:', reason);
+  console.error('Promesa rechazada no manejada:', reason);
 });
