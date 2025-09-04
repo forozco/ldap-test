@@ -9,14 +9,11 @@ Servidor proxy para autenticación LDAP del Instituto Nacional Electoral (INE) c
 git clone https://github.com/forozco/ldap-test.git
 cd ldap-test/ldap-proxy
 
-# 2. Instalar dependencias
-npm install
+# 2. Una sola línea para configurar todo
+chmod +x setup.sh && ./setup.sh
 
-# 3. Configurar variables de entorno (opcional)
-cp .env.example .env
-
-# 4. Iniciar el servidor
-npm start
+# 3. Iniciar el servidor
+./start-with-proxy.sh
 ```
 
 ## ⚙️ Configuración Manual
@@ -66,19 +63,24 @@ DEV_MODE=false
 
 ## 🚀 Iniciar el Servidor
 
-### Opción 1: NPM Scripts (Recomendado)
+### Opción 1: Script con proxy (Recomendado)
+```bash
+./start-with-proxy.sh    # Configuración completa con logs detallados
+```
+
+### Opción 2: NPM Scripts
 ```bash
 npm start          # Inicio normal
 npm run dev        # Modo desarrollo con watch
 ```
 
-### Opción 2: Scripts disponibles
+### Opción 3: Scripts individuales
 ```bash
 ./start-server.sh     # Inicio básico
 ./start-with-logs.sh  # Con logs detallados
 ```
 
-### Opción 3: Node directo
+### Opción 4: Node directo
 ```bash
 node server.js
 ```
@@ -181,8 +183,11 @@ ldap-proxy/
 ├── package.json           # Dependencias
 ├── .env                   # Configuración (no en git)
 ├── .env.example           # Plantilla de configuración
+├── proxy.conf.json        # Configuración proxy Angular
+├── setup.sh               # Script de instalación automática
 ├── start-server.sh        # Script de inicio básico
 ├── start-with-logs.sh     # Script con logs detallados
+├── start-with-proxy.sh    # Script completo con proxy
 └── README.md             # Esta documentación
 ```
 
