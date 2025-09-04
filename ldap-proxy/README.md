@@ -1,6 +1,6 @@
 # LDAP Proxy Server - INE
 
-Servidor proxy para autenticación LDAP del Instituto Nacional Electoral (INE).
+Servidor proxy para autenticación LDAP del Instituto Nacional Electoral (INE) con soporte completo para Spring Security authorities.
 
 ## 🚀 Instalación Rápida
 
@@ -9,11 +9,14 @@ Servidor proxy para autenticación LDAP del Instituto Nacional Electoral (INE).
 git clone https://github.com/forozco/ldap-test.git
 cd ldap-test/ldap-proxy
 
-# 2. Una sola línea para configurar todo
-chmod +x setup.sh && ./setup.sh
+# 2. Instalar dependencias
+npm install
 
-# 3. Iniciar el servidor
-./start-with-proxy.sh
+# 3. Configurar variables de entorno (opcional)
+cp .env.example .env
+
+# 4. Iniciar el servidor
+npm start
 ```
 
 ## ⚙️ Configuración Manual
@@ -33,8 +36,19 @@ cp .env.example .env
 El archivo `.env` contiene la configuración del servidor LDAP del INE:
 
 ```env
+# Servidor LDAP
 LDAP_URL=ldap://ldap-pruebas.ine.mx:389
 LDAP_USER_DN_PATTERN=uid={0},ou=People,dc=ife.org.mx
+LDAP_GROUP_SEARCH_BASE=ou=Grupos,dc=ife.org.mx
+LDAP_GROUP_ROLE_ATTRIBUTE=cn
+
+# JWT Configuration
+JWT_SECRET=tu_jwt_secret_aqui
+JWT_EXPIRES=1h
+
+# Server Configuration
+PORT=4000
+CORS_ORIGIN=http://localhost:4200,http://localhost:3000
 DEV_MODE=false
 ```
 
@@ -52,34 +66,46 @@ DEV_MODE=false
 
 ## 🚀 Iniciar el Servidor
 
-### Opción 1: Script con logs (Recomendado)
-```bash
-./start-with-proxy.sh
-```
-
-### Opción 2: NPM Scripts
+### Opción 1: NPM Scripts (Recomendado)
 ```bash
 npm start          # Inicio normal
 npm run dev        # Modo desarrollo con watch
 ```
 
-### Opción 3: Scripts individuales
+### Opción 2: Scripts disponibles
 ```bash
 ./start-server.sh     # Inicio básico
 ./start-with-logs.sh  # Con logs detallados
 ```
 
-## 🌐 Integración con Angular
-
-### 1. Usando Proxy (Recomendado)
+### Opción 3: Node directo
 ```bash
-# En tu proyecto Angular
-ng serve --proxy-config /path/to/ldap-proxy/proxy.conf.json
+node server.js
 ```
 
-### 2. Configuración manual en Angular
-Copia el archivo `proxy.conf.json` a tu proyecto Angular y configura en `angular.json`:
+## 🌐 Integración con Angular
 
+### Configuración de Proxy
+Crea un archivo `proxy.conf.json` en tu proyecto Angular:
+
+```json
+{
+  "/api/*": {
+    "target": "http://localhost:4000",
+    "secure": false,
+    "changeOrigin": true,
+    "logLevel": "debug"
+  }
+}
+```
+
+### Usar en Angular
+```bash
+# Ejecutar Angular con proxy
+ng serve --proxy-config proxy.conf.json
+```
+
+### Configuración en angular.json
 ```json
 "serve": {
   "builder": "@angular-devkit/build-angular:dev-server",
@@ -124,7 +150,8 @@ Obtener perfil del usuario autenticado (requiere token JWT)
 | `PORT` | Puerto del servidor | `4000` |
 | `LDAP_URL` | URL del servidor LDAP | `ldap://ldap-pruebas.ine.mx:389` |
 | `LDAP_USER_DN_PATTERN` | Patrón DN de usuarios | `uid={0},ou=People,dc=ife.org.mx` |
-| `LDAP_GROUP_SEARCH_BASE` | Base de búsqueda de grupos | `ou=Groups,dc=ife.org.mx` |
+| `LDAP_GROUP_SEARCH_BASE` | Base de búsqueda de grupos | `ou=Grupos,dc=ife.org.mx` |
+| `LDAP_GROUP_ROLE_ATTRIBUTE` | Atributo de rol en grupos | `cn` |
 | `JWT_SECRET` | Clave secreta para JWT | `cambiar_en_produccion` |
 | `JWT_EXPIRES` | Tiempo de expiración JWT | `1h` |
 | `CORS_ORIGIN` | Orígenes permitidos para CORS | `http://localhost:4200,http://localhost:3000` |
@@ -154,13 +181,21 @@ ldap-proxy/
 ├── package.json           # Dependencias
 ├── .env                   # Configuración (no en git)
 ├── .env.example           # Plantilla de configuración
-├── proxy.conf.json        # Configuración proxy Angular
-├── setup.sh               # Script de instalación
 ├── start-server.sh        # Script de inicio básico
-├── start-with-logs.sh     # Script con logs
-├── start-with-proxy.sh    # Script completo con proxy
+├── start-with-logs.sh     # Script con logs detallados
 └── README.md             # Esta documentación
 ```
+
+## ✨ Características
+
+- ✅ Autenticación LDAP con servidor INE
+- ✅ Generación automática de authorities con prefijo `ROLE_`
+- ✅ Compatible con Spring Security
+- ✅ Búsqueda automática de grupos LDAP
+- ✅ JWT tokens con información completa del usuario
+- ✅ Logs detallados para debugging
+- ✅ Soporte para múltiples patrones de DN
+- ✅ CORS configurado para Angular
 
 ## 🔒 Seguridad
 
@@ -168,6 +203,30 @@ ldap-proxy/
 - Usar HTTPS en producción
 - Configurar CORS apropiadamente
 - Revisar logs periódicamente
+- El servidor LDAP utiliza la estructura de dominio `dc=ife.org.mx`
+
+## 🧪 Pruebas
+
+### Ejemplo de petición con cURL
+```bash
+curl -X POST http://localhost:4000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username": "tu_usuario", "password": "tu_password"}'
+```
+
+### Respuesta esperada
+```json
+{
+  "ok": true,
+  "token": "eyJ...",
+  "user": {
+    "username": "tu_usuario",
+    "dn": "uid=tu_usuario,ou=People,dc=ife.org.mx",
+    "groups": ["GRUPO1", "GRUPO2"],
+    "authorities": ["ROLE_GRUPO1", "ROLE_GRUPO2"]
+  }
+}
+```
 
 ## 📞 Soporte
 
